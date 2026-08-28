@@ -1,0 +1,24 @@
+# Build
+*.o
+*.a
+*.elf
+*.3gx
+*.bin
+*.cia
+output/
+build/
+*.d
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# API Key (never commit!)
+api.txt
+**/api.txt
