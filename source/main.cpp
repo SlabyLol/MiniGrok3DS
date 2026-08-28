@@ -13,42 +13,45 @@
 
 namespace CTRPluginFramework
 {
-    // ============================================================
-    // MiniGrok – AI assistant for Nintendo 3DS
-    //
-    // Global hotkey:
-    //     SELECT + X
-    //
-    // The hotkey is handled directly through libctru so it works
-    // independently of the CTRPF menu hotkey.
-    // ============================================================
-
     static bool gChatOpen = false;
-    static bool gHotkeyWasDown = false;
+
+    // ------------------------------------------------------------
+    // Open MiniGrok
+    // ------------------------------------------------------------
 
     static void OpenChat(MenuEntry *entry)
     {
         (void)entry;
 
+        if (gChatOpen)
+            return;
+
         gChatOpen = true;
+
         MiniGrokChat::Open();
+
         gChatOpen = false;
     }
+
+    // ------------------------------------------------------------
+    // About
+    // ------------------------------------------------------------
 
     static void AboutMiniGrok(MenuEntry *entry)
     {
         (void)entry;
 
-        std::string msg =
+        MessageBox(
+            "MiniGrok",
             "MiniGrok v0.1\n\n"
-            "The cute AI assistant for your 3DS.\n\n"
-            "SELECT + X: Open MiniGrok\n\n"
-            "Chat • Screen reading • Files • Titles\n\n"
-            "API key:\n"
-            "sd:/luma/plugins/MiniGrok/api.txt";
-
-        MessageBox("About MiniGrok", msg)();
+            "AI assistant for Nintendo 3DS.\n\n"
+            "SELECT + X  -  Open MiniGrok"
+        )();
     }
+
+    // ------------------------------------------------------------
+    // Screen
+    // ------------------------------------------------------------
 
     static void ReadScreen(MenuEntry *entry)
     {
@@ -56,14 +59,18 @@ namespace CTRPluginFramework
 
         if (!Permissions::Ask(
                 "Read screen",
-                "May MiniGrok read the current screen and send it to the AI?"))
+                "May MiniGrok read the current screen?"))
             return;
 
         MessageBox(
-            "Read screen",
-            "Screen capture is not implemented yet.\n"
-            "Framebuffer dump will come here later.")();
+            "MiniGrok",
+            "Screen capture is not implemented yet."
+        )();
     }
+
+    // ------------------------------------------------------------
+    // Files
+    // ------------------------------------------------------------
 
     static void FileTools(MenuEntry *entry)
     {
@@ -71,7 +78,8 @@ namespace CTRPluginFramework
 
         Keyboard kb("File tools");
 
-        std::vector<std::string> options = {
+        std::vector<std::string> options =
+        {
             "Read file",
             "Write / create file",
             "Cancel"
@@ -104,6 +112,10 @@ namespace CTRPluginFramework
         }
     }
 
+    // ------------------------------------------------------------
+    // Titles
+    // ------------------------------------------------------------
+
     static void TitleTools(MenuEntry *entry)
     {
         (void)entry;
@@ -116,6 +128,10 @@ namespace CTRPluginFramework
         TitleHelper::LaunchDemo();
     }
 
+    // ------------------------------------------------------------
+    // Language
+    // ------------------------------------------------------------
+
     static void ChangeLanguage(MenuEntry *entry)
     {
         (void)entry;
@@ -123,45 +139,69 @@ namespace CTRPluginFramework
         Language::ShowLanguageMenu();
     }
 
-    void InitMenu(PluginMenu &menu)
+    // ------------------------------------------------------------
+    // Menu
+    // ------------------------------------------------------------
+
+    static void InitMenu(PluginMenu &menu)
     {
-        menu += new MenuEntry(
+        /*
+         * IMPORTANT:
+         *
+         * The hotkey is attached to the MenuEntry itself.
+         * CTRPluginFramework checks the hotkey every frame.
+         *
+         * SELECT + X
+         */
+
+        MenuEntry *chat = new MenuEntry(
             "Open MiniGrok Chat",
             nullptr,
-            OpenChat);
+            OpenChat
+        );
+
+        chat->Hotkeys += Hotkey(
+            Key::SELECT | Key::X,
+            "SELECT + X"
+        );
+
+        menu += chat;
 
         menu += new MenuEntry(
-            "Read screen (with permission)",
+            "Read screen",
             nullptr,
-            ReadScreen);
+            ReadScreen
+        );
 
         menu += new MenuEntry(
             "File tools",
             nullptr,
-            FileTools);
+            FileTools
+        );
 
         menu += new MenuEntry(
             "Launch title",
             nullptr,
-            TitleTools);
+            TitleTools
+        );
 
         menu += new MenuEntry(
             "Language / Sprache",
             nullptr,
-            ChangeLanguage);
+            ChangeLanguage
+        );
 
         menu += new MenuEntry(
             "About MiniGrok",
             nullptr,
-            AboutMiniGrok);
+            AboutMiniGrok
+        );
     }
 
-    /*
-     * Called by CTRPluginFramework when a process is patched.
-     *
-     * We don't need game-specific patches because MiniGrok is
-     * intended to work as a general plugin.
-     */
+    // ------------------------------------------------------------
+    // CTRPluginFramework callbacks
+    // ------------------------------------------------------------
+
     void PatchProcess(FwkSettings &settings)
     {
         (void)settings;
@@ -170,82 +210,26 @@ namespace CTRPluginFramework
     void OnProcessExit(void)
     {
         gChatOpen = false;
-        gHotkeyWasDown = false;
     }
 
-    /*
-     * Check SELECT + X.
-     *
-     * hidKeysDown() returns keys that were pressed during the
-     * current frame, which prevents the chat from being opened
-     * repeatedly while the buttons are being held.
-     */
-    static void CheckMiniGrokHotkey()
-    {
-        const u32 keys = hidKeysDown();
-
-        const bool selectPressed =
-            (keys & KEY_SELECT) != 0;
-
-        const bool xPressed =
-            (keys & KEY_X) != 0;
-
-        /*
-         * We also check hidKeysHeld() so that either button can
-         * be pressed first:
-         *
-         * SELECT held -> X pressed
-         * X held      -> SELECT pressed
-         */
-        const u32 held = hidKeysHeld();
-
-        const bool selectHeld =
-            (held & KEY_SELECT) != 0;
-
-        const bool xHeld =
-            (held & KEY_X) != 0;
-
-        const bool hotkey =
-            (selectHeld && xPressed) ||
-            (xHeld && selectPressed);
-
-        if (hotkey && !gHotkeyWasDown && !gChatOpen)
-        {
-            gHotkeyWasDown = true;
-
-            MiniGrokChat::Open();
-        }
-
-        /*
-         * Don't allow another activation until both buttons
-         * have been released.
-         */
-        if (!selectHeld && !xHeld)
-        {
-            gHotkeyWasDown = false;
-        }
-    }
+    // ------------------------------------------------------------
+    // Main
+    // ------------------------------------------------------------
 
     int main(void)
     {
-        /*
-         * Make sure the HID service is initialized.
-         * In a normal 3GX/CTRPF environment this is already
-         * available, but hidInit() is intentionally not called
-         * here because CTRPF/libctru owns the service lifecycle.
-         */
-
         PluginMenu *menu = new PluginMenu(
             "MiniGrok",
             0,
             1,
             0,
-            "MiniGrok - your AI assistant on the 3DS.\n"
-            "SELECT + X opens MiniGrok.");
+            "MiniGrok - AI assistant for Nintendo 3DS.\n"
+            "Press SELECT + X to open MiniGrok."
+        );
 
         /*
-         * Synchronize with frames so CTRPF keeps processing
-         * the plugin while the game is running.
+         * Let CTRPF process menu entries and hotkeys
+         * on every frame.
          */
         menu->SynchronizeWithFrame(true);
 
@@ -254,10 +238,10 @@ namespace CTRPluginFramework
         InitMenu(*menu);
 
         /*
-         * Run the normal CTRPF plugin menu.
+         * Start CTRPF main loop.
          *
-         * The SELECT + X hotkey is handled by the plugin's
-         * frame/input processing.
+         * The SELECT + X hotkey is now handled by
+         * MenuEntry::Hotkeys.
          */
         menu->Run();
 
