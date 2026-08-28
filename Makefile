@@ -60,7 +60,7 @@ all: $(BUILD)
 
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
-	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile all
 
 clean:
 	@echo clean ...
@@ -72,16 +72,19 @@ else
 
 DEPENDS	:=	$(OFILES:.o=.d)
 
-# Explicit dependency: elf waits for ALL objects
+# Default goal must be .3gx (first target would otherwise be .elf only)
+.DEFAULT_GOAL := all
+
+.PHONY: all
+all: $(OUTPUT).3gx
+
 $(OUTPUT).elf : $(OFILES)
 	@echo linking $(notdir $@)
 	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
 
-$(OUTPUT).3gx : $(OUTPUT).elf
+$(OUTPUT).3gx : $(OUTPUT).elf $(TOPDIR)/$(PLGINFO)
 	@echo creating $(notdir $@)
 	@3gxtool -s $< $(TOPDIR)/$(PLGINFO) $@
-
-all: $(OUTPUT).3gx
 
 -include $(DEPENDS)
 
