@@ -1,12 +1,10 @@
 Author: MiniGrok Team
 
-# Plugin version
 Version:
-  Major: 0
-  Minor: 1
-  Revision: 0
+    Major: 0
+    Minor: 1
+    Revision: 0
 
-# Low TitleId of games compatible with this plugin (empty / 0 = all)
 Targets:
 
 Title: MiniGrok
@@ -21,4 +19,8 @@ Description: |
   Place your xAI API key in:
   sd:/luma/plugins/MiniGrok/api.txt
 
+Compatibility: Any
+
 MemorySize: 5MiB
+
+UsePrivateMemory: false

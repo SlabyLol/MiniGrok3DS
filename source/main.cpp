@@ -123,12 +123,3 @@ int main(void)
 }
 
 } // namespace CTRPluginFramework
-
-// Global entry point required by the standard 3dsx CRT.
-// Real 3gx plugins are entered via CTRPF; this keeps the CI link step happy.
-extern "C" int main(int argc, char **argv)
-{
-    (void)argc;
-    (void)argv;
-    return CTRPluginFramework::main();
-}
