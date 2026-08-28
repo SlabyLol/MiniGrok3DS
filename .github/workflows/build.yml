@@ -13,6 +13,10 @@ jobs:
     container:
       image: devkitpro/devkitarm:latest
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,11 +24,9 @@ jobs:
       - name: Add ThePixellizerOSS package repos + install tools
         run: |
           set -e
-          # Official 3DS packages
           sudo dkp-pacman -Sy --noconfirm
           sudo dkp-pacman -S --noconfirm 3ds-dev || true
 
-          # Add ThePixellizerOSS repos (libctrpf / 3gxtool)
           PACMAN_CONF=/opt/devkitpro/pacman/etc/pacman.conf
           if ! grep -Fxq "[thepixellizeross-lib]" "$PACMAN_CONF" 2>/dev/null; then
             echo -e "\n[thepixellizeross-lib]\nServer = https://thepixellizeross.gitlab.io/packages/any\nSigLevel = Optional" | sudo tee -a "$PACMAN_CONF"
@@ -34,9 +36,7 @@ jobs:
           fi
 
           sudo dkp-pacman -Sy --noconfirm
-
-          # Install CTRPluginFramework + 3gxtool
-          sudo dkp-pacman -S --noconfirm libctrpf || echo "libctrpf install failed – will try fallback"
+          sudo dkp-pacman -S --noconfirm libctrpf || echo "libctrpf install failed"
           sudo dkp-pacman -S --noconfirm 3gxtool || echo "3gxtool not available via pacman"
 
       - name: Show environment
@@ -44,30 +44,17 @@ jobs:
           echo "DEVKITPRO=$DEVKITPRO"
           echo "DEVKITARM=$DEVKITARM"
           arm-none-eabi-g++ --version || true
-          echo "--- looking for CTRPluginFramework ---"
+          echo "--- CTRPluginFramework.hpp ---"
           find /opt/devkitpro -name "CTRPluginFramework.hpp" 2>/dev/null | head -5 || true
-          ls -la /opt/devkitpro/libctrpf 2>/dev/null || true
+          echo "--- types.h locations ---"
+          find /opt/devkitpro -name "types.h" 2>/dev/null | head -10 || true
           ls -la /opt/devkitpro/libctrpf/include 2>/dev/null || true
-
-      - name: Update Makefile paths for libctrpf
-        run: |
-          # Ensure Makefile can find libctrpf
-          if [ -d /opt/devkitpro/libctrpf ]; then
-            echo "libctrpf found – injecting into Makefile"
-            # Append include/lib paths if not already present
-            if ! grep -q "libctrpf" Makefile; then
-              sed -i 's|LIBDIRS\t:=\t$(CTRULIB) $(PORTLIBS)|LIBDIRS\t:=\t$(CTRULIB) $(PORTLIBS) $(DEVKITPRO)/libctrpf|' Makefile || true
-            fi
-          else
-            echo "libctrpf directory not found at expected location"
-          fi
 
       - name: Build
         run: |
+          set -o pipefail
           make clean || true
           make -j$(nproc) 2>&1 | tee build.log
-          # Keep exit code of make for the step status
-          exit ${PIPESTATUS[0]}
 
       - name: Collect artifacts
         if: always()
@@ -77,7 +64,7 @@ jobs:
           cp -v *.elf artifacts/ 2>/dev/null || true
           cp -v *.3dsx artifacts/ 2>/dev/null || true
           cp -v build.log artifacts/ 2>/dev/null || true
-          find . -name "*.o" -o -name "*.elf" -o -name "*.3gx" | head -50 > artifacts/build_files.txt || true
+          find . \( -name "*.o" -o -name "*.elf" -o -name "*.3gx" \) | head -50 > artifacts/build_files.txt || true
           ls -la > artifacts/listing.txt
           echo "Artifact collection done"
 
