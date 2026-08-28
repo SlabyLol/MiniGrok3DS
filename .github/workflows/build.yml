@@ -26,10 +26,8 @@ jobs:
           set +e
           PACMAN_CONF=/opt/devkitpro/pacman/etc/pacman.conf
 
-          # Official sync may 403 on CI runners – do not fail the job
           sudo dkp-pacman -Sy --noconfirm || echo "WARNING: official dkp sync failed (403?) – continuing with image packages"
 
-          # ThePixellizerOSS (libctrpf)
           if ! grep -Fxq "[thepixellizeross-lib]" "$PACMAN_CONF" 2>/dev/null; then
             echo -e "\n[thepixellizeross-lib]\nServer = https://thepixellizeross.gitlab.io/packages/any\nSigLevel = Optional" | sudo tee -a "$PACMAN_CONF"
           fi
@@ -51,16 +49,18 @@ jobs:
         run: |
           set -o pipefail
           make clean || true
-          make -j$(nproc) 2>&1 | tee build.log
+          # Sequential build avoids link-before-objects races with the 3gx rules
+          make -j1 2>&1 | tee build.log
 
       - name: Collect artifacts
         if: always()
         run: |
           mkdir -p artifacts
-          cp -v MiniGrok.3gx MiniGrok.elf MiniGrok.3dsx build.log 2>/dev/null || true
-          cp -v *.3gx *.elf *.3dsx build.log artifacts/ 2>/dev/null || true
+          cp -v MiniGrok.3gx MiniGrok.elf build.log 2>/dev/null || true
+          cp -v *.3gx *.elf build.log artifacts/ 2>/dev/null || true
+          ls -la build/ >> artifacts/listing.txt 2>/dev/null || true
+          ls -la >> artifacts/listing.txt
           find . \( -name '*.o' -o -name '*.elf' -o -name '*.3gx' \) | head -50 > artifacts/build_files.txt || true
-          ls -la > artifacts/listing.txt
           ls -la artifacts/ || true
 
       - name: Upload build artifacts
