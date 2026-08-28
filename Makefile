@@ -39,16 +39,13 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:=	-lctru -lm
+LIBS	:=	-lctrpf -lctru -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:=	$(CTRULIB) $(PORTLIBS)
-
-# If you have libctrpf installed:
-# LIBDIRS += $(DEVKITPRO)/libctrpf
+LIBDIRS	:=	$(CTRULIB) $(PORTLIBS) $(DEVKITPRO)/libctrpf
 
 #---------------------------------------------------------------------------------
 # no real need to edit anything past this point unless you need to add additional
@@ -125,7 +122,12 @@ all	:	$(OUTPUT).3gx
 
 $(OUTPUT).3gx	:	$(OUTPUT).elf
 	@echo "built ... $(notdir $@)"
-	@# 3gxtool $(OUTPUT).elf $(OUTPUT).3gx   # uncomment when 3gxtool is ready
+	@# Prefer 3gxtool if available
+	@if command -v 3gxtool >/dev/null 2>&1; then \
+		3gxtool $(OUTPUT).elf $(OUTPUT).3gx ; \
+	else \
+		echo "3gxtool not found – left .elf only" ; \
+	fi
 
 $(OUTPUT).elf	:	$(OFILES)
 
