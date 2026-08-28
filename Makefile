@@ -10,21 +10,13 @@ TOPDIR ?= $(CURDIR)
 include $(DEVKITARM)/3ds_rules
 
 #---------------------------------------------------------------------------------
-# TARGET is the name of the output
-# BUILD is the directory where object files & intermediate files will be placed
-# SOURCES is a list of directories containing source code
-# DATA is a list of directories containing data files
-# INCLUDES is a list of directories containing header files
-#---------------------------------------------------------------------------------
 TARGET		:=	MiniGrok
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
-# RESOURCES	:=	resources
+PLGINFO		:=	MiniGrok.plgInfo
 
-#---------------------------------------------------------------------------------
-# options for code generation
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
@@ -42,14 +34,8 @@ LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 LIBS	:=	-lctrpf -lctru -lm
 
 #---------------------------------------------------------------------------------
-# list of directories containing libraries, this must be the top level containing
-# include and lib
-#---------------------------------------------------------------------------------
 LIBDIRS	:=	$(CTRULIB) $(PORTLIBS) $(DEVKITPRO)/libctrpf
 
-#---------------------------------------------------------------------------------
-# no real need to edit anything past this point unless you need to add additional
-# rules for different file extensions
 #---------------------------------------------------------------------------------
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
@@ -67,26 +53,15 @@ CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 
-#---------------------------------------------------------------------------------
-# use CXX for linking C++ projects, CC for standard C
-#---------------------------------------------------------------------------------
 ifeq ($(strip $(CPPFILES)),)
-#---------------------------------------------------------------------------------
 	export LD	:=	$(CC)
-#---------------------------------------------------------------------------------
 else
-#---------------------------------------------------------------------------------
 	export LD	:=	$(CXX)
-#---------------------------------------------------------------------------------
 endif
-#---------------------------------------------------------------------------------
 
 export OFILES_SOURCES 	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
-
 export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES))
-
 export OFILES 		:=	$(OFILES_BIN) $(OFILES_SOURCES)
-
 export HFILES	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
 
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
@@ -97,52 +72,41 @@ export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 .PHONY: $(BUILD) clean all
 
-#---------------------------------------------------------------------------------
 all: $(BUILD)
 
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
-#---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
 	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(TARGET).3gx
 
-#---------------------------------------------------------------------------------
 else
 .PHONY:	all
 
 DEPENDS	:=	$(OFILES:.o=.d)
 
-#---------------------------------------------------------------------------------
-# main targets
-#---------------------------------------------------------------------------------
-all	:	$(OUTPUT).3gx
+all	:	$(OUTPUT).elf $(OUTPUT).3gx
 
-$(OUTPUT).3gx	:	$(OUTPUT).elf
+$(OUTPUT).elf	:	$(OFILES)
+
+# 3gxtool usage: 3gxtool <input.elf> <settings.plgInfo> <output.3gx>
+$(OUTPUT).3gx	:	$(OUTPUT).elf $(TOPDIR)/$(PLGINFO)
 	@echo "built ... $(notdir $@)"
-	@# Prefer 3gxtool if available
 	@if command -v 3gxtool >/dev/null 2>&1; then \
-		3gxtool $(OUTPUT).elf $(OUTPUT).3gx ; \
+		3gxtool $(OUTPUT).elf $(TOPDIR)/$(PLGINFO) $(OUTPUT).3gx || \
+		(echo "3gxtool failed – keeping .elf artifact"; exit 0); \
 	else \
 		echo "3gxtool not found – left .elf only" ; \
 	fi
 
-$(OUTPUT).elf	:	$(OFILES)
-
 $(OFILES_SOURCES) : $(HFILES)
 
-#---------------------------------------------------------------------------------
-# you need a rule like this for each extension you use as binary data
-#---------------------------------------------------------------------------------
 %.bin.o	%_bin.h :	%.bin
-#---------------------------------------------------------------------------------
 	@echo $(notdir $<)
 	@$(bin2o)
 
 -include $(DEPENDS)
 
-#---------------------------------------------------------------------------------------
 endif
-#---------------------------------------------------------------------------------------
