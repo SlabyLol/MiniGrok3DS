@@ -1,0 +1,67 @@
+name: Build MiniGrok
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install 3DS development packages
+        run: |
+          # Update package database and install 3ds-dev tools
+          sudo dkp-pacman -Sy --noconfirm
+          sudo dkp-pacman -S --noconfirm 3ds-dev 3ds-libctru 3ds-cmake 3ds-pkg-config || true
+          # Try to get 3gxtool if available
+          sudo dkp-pacman -S --noconfirm 3ds-3gxtool || echo "3gxtool not in official repos – will skip full .3gx packaging"
+
+      - name: Show environment
+        run: |
+          echo "DEVKITPRO=$DEVKITPRO"
+          echo "DEVKITARM=$DEVKITARM"
+          which arm-none-eabi-g++ || true
+          arm-none-eabi-g++ --version || true
+          ls $DEVKITPRO || true
+
+      - name: Build
+        run: |
+          # Current Makefile is a skeleton and expects CTRPluginFramework (libctrpf).
+          # We attempt the build and capture the result for artifacts / debugging.
+          make clean || true
+          make -j$(nproc) 2>&1 | tee build.log || echo "Build finished with errors (expected until full CTRPF + 3gxtool setup)"
+
+      - name: Collect artifacts
+        if: always()
+        run: |
+          mkdir -p artifacts
+          # Collect whatever was produced
+          cp -v *.3gx artifacts/ 2>/dev/null || true
+          cp -v *.elf artifacts/ 2>/dev/null || true
+          cp -v *.3dsx artifacts/ 2>/dev/null || true
+          cp -v build.log artifacts/ 2>/dev/null || true
+          # Also keep the source tree summary
+          find . -name "*.o" -o -name "*.elf" -o -name "*.3gx" | head -50 > artifacts/build_files.txt || true
+          ls -la > artifacts/listing.txt
+          echo "Artifact collection done"
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiniGrok-build
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Optional future job: full CTRPF build once libctrpf is properly vendored
+  # or installed from ThePixellizerOSS packages.
