@@ -72,12 +72,16 @@ else
 
 DEPENDS	:=	$(OFILES:.o=.d)
 
-$(OUTPUT).3gx : $(OFILES)
+# Explicit dependency: elf waits for ALL objects
+$(OUTPUT).elf : $(OFILES)
+	@echo linking $(notdir $@)
+	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
 
-.PRECIOUS: %.elf
-%.3gx: %.elf
+$(OUTPUT).3gx : $(OUTPUT).elf
 	@echo creating $(notdir $@)
-	@3gxtool -s $(word 1, $^) $(TOPDIR)/$(PLGINFO) $@
+	@3gxtool -s $< $(TOPDIR)/$(PLGINFO) $@
+
+all: $(OUTPUT).3gx
 
 -include $(DEPENDS)
 
