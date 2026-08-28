@@ -20,7 +20,7 @@ namespace CTRPluginFramework
 
 static void AboutMiniGrok(MenuEntry *entry)
 {
-    std::string msg = 
+    std::string msg =
         "MiniGrok v0.1 (Foundation)\n\n"
         "The cute AI assistant for your 3DS.\n"
         "Chat • Screen reading • Files • Titles\n\n"
@@ -33,18 +33,16 @@ static void AboutMiniGrok(MenuEntry *entry)
 
 static void OpenChat(MenuEntry *entry)
 {
-    // Later: own overlay with face + chat
     MiniGrokChat::Open();
 }
 
 static void ReadScreen(MenuEntry *entry)
 {
-    if (!Permissions::Ask("Read screen", 
+    if (!Permissions::Ask("Read screen",
         "May MiniGrok read the current screen and send it to the AI?"))
         return;
 
-    // TODO: Framebuffer Capture + Upload
-    MessageBox("Read screen", 
+    MessageBox("Read screen",
         "Screen capture is not implemented yet.\n"
         "Framebuffer dump will come here later.")();
 }
@@ -78,7 +76,7 @@ static void FileTools(MenuEntry *entry)
 
 static void TitleTools(MenuEntry *entry)
 {
-    if (!Permissions::Ask("Open title", 
+    if (!Permissions::Ask("Open title",
         "May MiniGrok launch a title?"))
         return;
 
@@ -100,16 +98,12 @@ void InitMenu(PluginMenu &menu)
     menu += new MenuEntry("About MiniGrok", nullptr, AboutMiniGrok);
 }
 
-// Called before the game starts
 void PatchProcess(FwkSettings &settings)
 {
-    // Safe patches can go here
 }
 
-// Cleanup on exit
 void OnProcessExit(void)
 {
-    // Cleanup
 }
 
 int main(void)
@@ -120,12 +114,8 @@ int main(void)
 
     menu->SynchronizeWithFrame(true);
 
-    // Load language
     Language::Load();
-
     InitMenu(*menu);
-
-    // Main loop
     menu->Run();
 
     delete menu;
@@ -133,3 +123,12 @@ int main(void)
 }
 
 } // namespace CTRPluginFramework
+
+// Global entry point required by the standard 3dsx CRT.
+// Real 3gx plugins are entered via CTRPF; this keeps the CI link step happy.
+extern "C" int main(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    return CTRPluginFramework::main();
+}
