@@ -29,10 +29,24 @@ This is the **project skeleton** (v0.1 – Foundation).
 - File and title stubs
 - Multi-language foundation
 - Build system ready
+- GitHub Actions workflow
 
 The hard parts (real API calls, screen capture, custom renderer for the face) are marked as TODOs and still need to be implemented.
 
-## Requirements to Build
+## GitHub Actions
+
+A workflow runs on every push / PR to `main`:
+
+- Uses the official `devkitpro/devkitarm` Docker image
+- Installs `3ds-dev` packages
+- Attempts to build the project
+- Uploads artifacts (logs + any produced binaries)
+
+You can also trigger it manually via **Actions → Build MiniGrok → Run workflow**.
+
+> **Note**: A complete `.3gx` currently requires CTRPluginFramework (`libctrpf`) + `3gxtool`. The CI currently documents the environment and collects build logs until those are fully integrated.
+
+## Requirements to Build (locally)
 
 1. **devkitPro** with the `3ds-dev` metapackage
 2. **CTRPluginFramework** (libctrpf) installed
@@ -107,6 +121,7 @@ MiniGrok/
 - [ ] More languages
 - [ ] Settings CIA
 - [ ] Better animations & sounds
+- [ ] Full CI production of `.3gx` (with vendored libctrpf)
 
 ## License
 
