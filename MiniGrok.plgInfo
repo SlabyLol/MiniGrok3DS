@@ -3,7 +3,7 @@ Author: MiniGrok Team
 Version:
     Major: 0
     Minor: 1
-    Revision: 1
+    Revision: 2
 
 Targets:
 
@@ -14,8 +14,7 @@ Summary: Cute AI assistant plugin for Nintendo 3DS
 Description: |
   MiniGrok – the cute AI assistant for your 3DS.
 
-  OPEN THE MENU: press SELECT
-  (change hotkey in Tools -> Settings)
+  OPEN THE MENU: hold SELECT + X
 
   Chat, screen info, file tools and process info,
   with permission prompts.

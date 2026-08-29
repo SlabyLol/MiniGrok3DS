@@ -1,5 +1,6 @@
 #include <3ds.h>
 #include <CTRPluginFramework.hpp>
+#include <CTRPluginFrameworkImpl/Preferences.hpp>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,7 @@ namespace CTRPluginFramework
 
 // ============================================================
 // MiniGrok – cute AI assistant for the 3DS
-// OPEN MENU: press SELECT (default CTRPF hotkey)
+// OPEN MENU: Select + X
 // ============================================================
 
 static bool g_notified = false;
@@ -23,12 +24,10 @@ static bool g_notified = false;
 static void AboutMiniGrok(MenuEntry *entry)
 {
     std::string msg =
-        "MiniGrok v0.1.1\n\n"
+        "MiniGrok v0.1.2\n\n"
         "The cute AI assistant for your 3DS.\n\n"
         "OPEN THIS MENU:\n"
-        "  Press SELECT\n\n"
-        "(You can change the hotkey in\n"
-        " Tools -> Settings inside this menu.)\n\n"
+        "  Hold SELECT + X\n\n"
         "API key (later):\n"
         "sd:/luma/plugins/MiniGrok/api.txt";
 
@@ -46,7 +45,6 @@ static void ReadScreen(MenuEntry *entry)
         "May MiniGrok read info about the current screens?"))
         return;
 
-    // Basic screen info (full framebuffer dump+upload comes later)
     std::string info =
         "Top screen: 400x240\n"
         "Bottom screen: 320x240\n\n"
@@ -101,16 +99,14 @@ static void ChangeLanguage(MenuEntry *entry)
 static void HowToOpen(MenuEntry *entry)
 {
     MessageBox("How to open MiniGrok",
-        "Default hotkey: SELECT\n\n"
+        "Hotkey: SELECT + X\n\n"
         "1. Start a game (plugin must load)\n"
-        "2. Press SELECT once\n"
+        "2. Hold SELECT and press X\n"
         "3. This menu opens\n\n"
-        "Change hotkey:\n"
-        "Tools -> Settings -> Menu Hotkey\n\n"
         "If nothing happens:\n"
         "- Plugin Loader enabled in Rosalina?\n"
         "- File at sd:/luma/plugins/default.3gx ?\n"
-        "- Screen flashed when game started?")();
+        "- Did you see 'MiniGrok loaded' on screen?")();
 }
 
 void InitMenu(PluginMenu &menu)
@@ -126,7 +122,6 @@ void InitMenu(PluginMenu &menu)
 
 void PatchProcess(FwkSettings &settings)
 {
-    // Keep defaults; touchscreen force-on patch can be added later if needed
     (void)settings;
 }
 
@@ -136,24 +131,26 @@ void OnProcessExit(void)
 
 int main(void)
 {
-    PluginMenu *menu = new PluginMenu("MiniGrok", 0, 1, 1,
+    // Force menu open combo: SELECT + X
+    Preferences::MenuHotkeys = static_cast<u32>(Key::Select | Key::X);
+
+    PluginMenu *menu = new PluginMenu("MiniGrok", 0, 1, 2,
         "MiniGrok – cute AI assistant.\n"
-        "Press SELECT to open this menu.");
+        "Open with SELECT + X.");
 
     menu->SynchronizeWithFrame(true);
 
-    // Show a one-shot hint so the user knows the plugin loaded
     if (!g_notified)
     {
         OSD::Notify("MiniGrok loaded!");
-        OSD::Notify("Press SELECT to open");
+        OSD::Notify("Open: SELECT + X");
         g_notified = true;
     }
 
     Language::Load();
     InitMenu(*menu);
 
-    // Blocks here and opens when the menu hotkey (default: SELECT) is pressed
+    // Blocks; opens when SELECT+X is pressed
     menu->Run();
 
     delete menu;
