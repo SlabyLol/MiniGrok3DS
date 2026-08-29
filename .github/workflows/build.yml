@@ -21,35 +21,68 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup package repos (tolerant of mirror 403)
+      - name: Install libctrpf + 3gxtool
         run: |
           set +e
           PACMAN_CONF=/opt/devkitpro/pacman/etc/pacman.conf
 
-          sudo dkp-pacman -Sy --noconfirm || echo "WARNING: official dkp sync failed (403?) – continuing with image packages"
-
+          # ThePixellizerOSS first (libctrpf lives here)
           if ! grep -Fxq "[thepixellizeross-lib]" "$PACMAN_CONF" 2>/dev/null; then
-            echo -e "\n[thepixellizeross-lib]\nServer = https://thepixellizeross.gitlab.io/packages/any\nSigLevel = Optional" | sudo tee -a "$PACMAN_CONF"
+            printf '\n[thepixellizeross-lib]\nServer = https://thepixellizeross.gitlab.io/packages/any\nSigLevel = Optional\n' | sudo tee -a "$PACMAN_CONF"
           fi
           if ! grep -Fxq "[thepixellizeross-linux]" "$PACMAN_CONF" 2>/dev/null; then
-            echo -e "\n[thepixellizeross-linux]\nServer = https://thepixellizeross.gitlab.io/packages/x86_64/linux\nSigLevel = Optional" | sudo tee -a "$PACMAN_CONF"
+            printf '\n[thepixellizeross-linux]\nServer = https://thepixellizeross.gitlab.io/packages/x86_64/linux\nSigLevel = Optional\n' | sudo tee -a "$PACMAN_CONF"
           fi
 
-          sudo dkp-pacman -Sy --noconfirm || true
+          # Official sync often 403 on GHA – never fail the job for that
+          sudo dkp-pacman -Sy --noconfirm 2>/dev/null || echo "dkp-libs sync failed (ignored)"
 
-          sudo dkp-pacman -S --noconfirm --needed 3ds-dev 2>/dev/null || echo "3ds-dev already present or unavailable"
-          sudo dkp-pacman -S --noconfirm --needed libctrpf 2>/dev/null || echo "libctrpf install failed"
-          sudo dkp-pacman -S --noconfirm --needed 3gxtool 2>/dev/null || echo "3gxtool not available"
+          # Install only from available DBs
+          sudo dkp-pacman -S --noconfirm --needed libctrpf
+          RC1=$?
+          sudo dkp-pacman -S --noconfirm --needed 3gxtool
+          RC2=$?
 
-          echo "=== libctrpf ==="
+          echo "libctrpf install exit: $RC1"
+          echo "3gxtool install exit: $RC2"
+
+          echo "=== search CTRPluginFramework.hpp ==="
+          find /opt/devkitpro -name 'CTRPluginFramework.hpp' 2>/dev/null
           ls -la /opt/devkitpro/libctrpf/include 2>/dev/null || true
-          find /opt/devkitpro -name 'CTRPluginFramework.hpp' 2>/dev/null | head -5 || true
+          ls -la /opt/devkitpro/libctrpf/lib 2>/dev/null || true
+
+          if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ]; then
+            echo "ERROR: libctrpf headers missing after install"
+            # Last resort: try direct package URL patterns
+            mkdir -p /tmp/ctrpf && cd /tmp/ctrpf
+            for url in \
+              "https://thepixellizeross.gitlab.io/packages/any/libctrpf-0.7.4-1-any.pkg.tar.xz" \
+              "https://thepixellizeross.gitlab.io/packages/any/libctrpf-0.8.0-1-any.pkg.tar.xz" \
+              "https://thepixellizeross.gitlab.io/packages/any/libctrpf-latest-any.pkg.tar.xz"
+            do
+              echo "try $url"
+              curl -fsSL -o pkg.tar.xz "$url" && break
+            done
+            if [ -f pkg.tar.xz ]; then
+              tar -xf pkg.tar.xz
+              sudo mkdir -p /opt/devkitpro/libctrpf
+              sudo cp -a opt/devkitpro/libctrpf/* /opt/devkitpro/libctrpf/ 2>/dev/null || \
+              sudo cp -a usr/* /opt/devkitpro/libctrpf/ 2>/dev/null || true
+              find /tmp/ctrpf -type d -name include 2>/dev/null
+              find /tmp/ctrpf -name 'CTRPluginFramework.hpp' 2>/dev/null
+            fi
+          fi
+
+          if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ]; then
+            echo "FATAL: still no CTRPluginFramework.hpp"
+            exit 1
+          fi
+          echo "libctrpf OK"
 
       - name: Build
         run: |
           set -o pipefail
           make clean || true
-          # Sequential build avoids link-before-objects races with the 3gx rules
           make -j1 2>&1 | tee build.log
 
       - name: Collect artifacts
