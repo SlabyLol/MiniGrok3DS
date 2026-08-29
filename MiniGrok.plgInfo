@@ -3,7 +3,7 @@ Author: MiniGrok Team
 Version:
     Major: 0
     Minor: 1
-    Revision: 0
+    Revision: 1
 
 Targets:
 
@@ -13,10 +13,14 @@ Summary: Cute AI assistant plugin for Nintendo 3DS
 
 Description: |
   MiniGrok – the cute AI assistant for your 3DS.
-  Chat, screen reading, file tools and title helpers,
-  all with permission prompts.
 
-  Place your xAI API key in:
+  OPEN THE MENU: press SELECT
+  (change hotkey in Tools -> Settings)
+
+  Chat, screen info, file tools and process info,
+  with permission prompts.
+
+  API key (later):
   sd:/luma/plugins/MiniGrok/api.txt
 
 Compatibility: Any

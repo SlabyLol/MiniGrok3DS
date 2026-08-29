@@ -1,5 +1,6 @@
 #include "TitleHelper.hpp"
 #include <CTRPluginFramework.hpp>
+#include <sstream>
 
 namespace TitleHelper
 {
@@ -7,14 +8,20 @@ namespace TitleHelper
     {
         using namespace CTRPluginFramework;
 
-        // Very simplified stub.
-        // Real title launching needs AM services and is
-        // different depending on context (Home Menu vs In-Game).
+        // Show current process info (safe, no launch yet)
+        u64 titleId = Process::GetTitleID();
+        std::string name;
+        Process::GetName(name);
 
-        MessageBox("Launch Title",
-            "Title launching is still a stub.\n\n"
-            "Later MiniGrok will be able to start\n"
-            "titles via the AM services\n"
-            "(with permission of course).")();
+        std::ostringstream oss;
+        oss << "Current process\n\n";
+        oss << "Name: " << (name.empty() ? "(unknown)" : name) << "\n";
+        oss << "Title ID:\n";
+        oss << std::hex << titleId << std::dec << "\n\n";
+        oss << "Launching other titles from a\n";
+        oss << "plugin needs more work and is\n";
+        oss << "not enabled in this build.";
+
+        MessageBox("Process info", oss.str())();
     }
 }

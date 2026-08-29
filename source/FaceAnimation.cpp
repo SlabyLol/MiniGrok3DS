@@ -3,27 +3,27 @@
 
 namespace FaceAnimation
 {
-    // Placeholder – later real GFX from resources/
-
     void ShowIdle()
     {
         using namespace CTRPluginFramework;
-        // Here the idle face would be drawn
-        // e.g. with OSD or custom screen
+        OSD::Notify("MiniGrok: :)");
     }
 
     void ShowThinking()
     {
-        // Thinking animation (dots, blinking eyes etc.)
+        using namespace CTRPluginFramework;
+        OSD::Notify("MiniGrok: thinking...");
     }
 
     void ShowTalking()
     {
-        // Talking animation
+        using namespace CTRPluginFramework;
+        OSD::Notify("MiniGrok: ...");
     }
 
     void ShowHappy()
     {
-        // Happy face
+        using namespace CTRPluginFramework;
+        OSD::Notify("MiniGrok: :D");
     }
 }

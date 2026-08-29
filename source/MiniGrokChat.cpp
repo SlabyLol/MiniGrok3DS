@@ -9,30 +9,30 @@ namespace MiniGrokChat
     {
         using namespace CTRPluginFramework;
 
-        // Currently just a stub.
-        // Later: own overlay with face + chat history + input
+        FaceAnimation::ShowIdle();
 
-        FaceAnimation::ShowIdle();   // show face (placeholder)
+        // Simple local "chat" UI until real API is wired
+        Keyboard kb("MiniGrok – say something");
+        kb.DisplayTopScreen = true;
 
-        std::string welcome =
-            "Hello! I am MiniGrok\n"
-            "your cute AI assistant.\n\n"
-            "Currently the chat is still\n"
-            "a stub.\n\n"
-            "Soon I will be able to:\n"
-            "- chat with you\n"
-            "- read your screen\n"
-            "- help with files\n"
-            "- launch titles\n\n"
-            "Please put your API key in:\n"
-            "sd:/luma/plugins/MiniGrok/api.txt";
+        std::string input;
+        if (kb.Open(input) < 0 || input.empty())
+        {
+            MessageBox("MiniGrok", "Cancelled.")();
+            return;
+        }
 
-        MessageBox("MiniGrok Chat", welcome)();
+        FaceAnimation::ShowThinking();
 
-        // TODO:
-        // 1. Custom renderer for chat window
-        // 2. Input field
-        // 3. HTTP request to xAI API
-        // 4. Show response + animate face
+        // Placeholder reply (no network yet)
+        std::string reply =
+            "You said:\n\"" + input + "\"\n\n"
+            "(Online Grok replies need WiFi +\n"
+            "API key in api.txt – coming next.)\n\n"
+            "For now I only echo locally.\n"
+            "Stay tuned! ";
+
+        FaceAnimation::ShowHappy();
+        MessageBox("MiniGrok", reply)();
     }
 }
