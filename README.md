@@ -1,24 +1,47 @@
 # MiniGrok
 
-Cute AI assistant plugin for Nintendo 3DS (CTRPluginFramework / 3GX).
+Cute AI assistant **3GX plugin** for Nintendo 3DS (Luma3DS + CTRPluginFramework).
 
-Built on the official **CTRPluginFramework BlankTemplate** layout.
-CI uses `pablomk7/libctrpf:0.8.0` (same as BlankTemplate).
+## Quick install (manual)
 
-## Install
+1. Download artifact **MiniGrok-3gx** from Actions
+2. Copy `MiniGrok.3gx` to:
+   ```text
+   sd:/luma/plugins/default.3gx
+   ```
+   (for one game only: `sd:/luma/plugins/<TITLEID>/MiniGrok.3gx`)
+3. Rosalina → Plugin Loader = **Enabled**
+4. Start a game → **SELECT + X**
 
-1. Rosalina → Plugin Loader = **Enabled**
-2. Copy artifact to: `sd:/luma/plugins/default.3gx`
-3. Remove other default plugins (e.g. Nimbus) while testing
-4. Start a **game**
-5. Open: **SELECT + X**
+## Installer (all games)
 
-You should see OSD: `MiniGrok loaded!`
+Actions also builds **MiniGrok-Installer**:
+
+1. Download artifact **MiniGrok-Installer**
+2. Put `MiniGrokInstaller.3dsx` on SD (e.g. `/3ds/`)
+3. Open with **Homebrew Launcher**
+4. It writes `default.3gx` automatically
+5. Reboot, enable Plugin Loader, start any game, **SELECT + X**
+
+`.cia` is built when `makerom` is available in CI (optional).
 
 ## Build
+
+Plugin (BlankTemplate layout):
 
 ```bash
 make
 ```
 
-Produces `MiniGrok.3gx`.
+Installer (after plugin exists):
+
+```bash
+cp MiniGrok.3gx installer/data/
+cd installer && make
+```
+
+## Hotkey
+
+**SELECT + X**
+
+OSD on load: `MiniGrok loaded!`

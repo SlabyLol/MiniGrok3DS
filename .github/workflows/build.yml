@@ -8,18 +8,17 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  plugin:
     runs-on: ubuntu-latest
     container:
       image: pablomk7/libctrpf:0.8.0
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Plugin
+      - name: Build 3GX plugin
         run: make
 
-      - name: Upload 3GX
+      - name: Upload plugin
         uses: actions/upload-artifact@v4
         with:
           name: MiniGrok-3gx
@@ -27,3 +26,67 @@ jobs:
             MiniGrok.3gx
             MiniGrok.elf
           if-no-files-found: error
+
+  installer:
+    needs: plugin
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download plugin artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: MiniGrok-3gx
+          path: plugin_out
+
+      - name: Prepare installer data
+        run: |
+          mkdir -p installer/data
+          cp -v plugin_out/MiniGrok.3gx installer/data/MiniGrok.3gx
+          ls -la installer/data/
+
+      - name: Install 3ds tools (best effort)
+        run: |
+          set +e
+          sudo dkp-pacman -Sy --noconfirm 2>/dev/null || true
+          sudo dkp-pacman -S --noconfirm --needed 3ds-dev 2>/dev/null || true
+          sudo dkp-pacman -S --noconfirm --needed 3ds-libctru 2>/dev/null || true
+          which arm-none-eabi-g++ || true
+          which makerom || true
+          which bannertool || true
+
+      - name: Build installer 3dsx
+        run: |
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITARM=/opt/devkitpro/devkitARM
+          cd installer
+          make clean || true
+          make -j1
+
+      - name: Try build CIA (optional)
+        run: |
+          set +e
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITARM=/opt/devkitpro/devkitARM
+          cd installer
+          # Homebrew CIA if makerom exists
+          if command -v makerom >/dev/null 2>&1; then
+            makerom -f cia -o MiniGrokInstaller.cia -elf MiniGrokInstaller.elf -rsf ../installer.rsf 2>/dev/null \
+              || makerom -f cia -o MiniGrokInstaller.cia -elf MiniGrokInstaller.elf 2>/dev/null \
+              || echo "CIA build skipped (needs rsf/banner)"
+          else
+            echo "makerom not available - 3dsx only"
+          fi
+          ls -la
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiniGrok-Installer
+          path: |
+            installer/MiniGrokInstaller.3dsx
+            installer/MiniGrokInstaller.elf
+            installer/MiniGrokInstaller.cia
+          if-no-files-found: warn
