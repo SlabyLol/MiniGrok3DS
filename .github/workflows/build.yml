@@ -36,21 +36,24 @@ jobs:
           cd /tmp
           rm -rf CTRPluginFramework
 
-          # Prefer GitHub mirror, fallback GitLab
           git clone --depth 1 https://github.com/Tekito-256/CTRPluginFramework.git CTRPluginFramework \
             || git clone --depth 1 https://gitlab.com/thepixellizeross/ctrpluginframework.git CTRPluginFramework
 
           cd CTRPluginFramework
+          if [ -d Library ]; then cd Library; fi
 
-          # Library lives in Library/ on most mirrors
-          if [ -d Library ]; then
-            cd Library
+          # Newer GCC treats overloaded-virtual as error; CTRPF is not fixed yet
+          if [ -f Makefile ]; then
+            sed -i 's/-Werror//g' Makefile || true
+            # Append override flags
+            printf '\nCXXFLAGS += -Wno-error=overloaded-virtual -Wno-error\nCFLAGS += -Wno-error\n' >> Makefile
           fi
 
           echo "Building libctrpf..."
-          make -j$(nproc) || make
+          make -j$(nproc) CXXFLAGS="$(grep '^CXXFLAGS' Makefile | head -1 | cut -d= -f2-) -Wno-error=overloaded-virtual -Wno-error" \
+            || make -j1 \
+            || make -j1 CXXFLAGS="-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -fomit-frame-pointer -ffunction-sections -fno-strict-aliasing -fno-rtti -fno-exceptions -std=gnu++11 -Wno-error=overloaded-virtual -Wno-error"
 
-          # Install headers + lib into expected location
           sudo mkdir -p /opt/devkitpro/libctrpf/include /opt/devkitpro/libctrpf/lib
 
           if [ -d include ]; then
@@ -61,48 +64,46 @@ jobs:
             sudo cp -a Include/. /opt/devkitpro/libctrpf/include/
           fi
 
-          # Common output names
-          for lib in libctrpf.a libCTRPluginFramework.a *.a; do
-            if [ -f "$lib" ]; then
-              sudo cp -v "$lib" /opt/devkitpro/libctrpf/lib/libctrpf.a
-              break
-            fi
-          done
-          find . -name 'libctrpf*.a' -o -name '*CTRPluginFramework*.a' 2>/dev/null | head -20
-
-          # dist-bin style layout if present
-          if [ -f dist-bin ] || grep -q dist-bin Makefile 2>/dev/null; then
-            make dist-bin || true
-            tar tf *.tar* 2>/dev/null | head || true
-            for t in *.tar.gz *.tar.xz *.tgz; do
-              [ -f "$t" ] || continue
-              mkdir -p /tmp/ctrpf-dist && tar -xf "$t" -C /tmp/ctrpf-dist
-              sudo cp -a /tmp/ctrpf-dist/*/include/. /opt/devkitpro/libctrpf/include/ 2>/dev/null || true
-              sudo cp -a /tmp/ctrpf-dist/*/lib/. /opt/devkitpro/libctrpf/lib/ 2>/dev/null || true
-            done
+          # Find built static libs
+          find . -name 'libctrpf*.a' -o -name '*ctrpf*.a' 2>/dev/null | head -20
+          if [ -f lib/libctrpf.a ]; then
+            sudo cp -v lib/libctrpf.a /opt/devkitpro/libctrpf/lib/
+          else
+            CAND=$(find . -name 'libctrpf.a' | head -1)
+            if [ -n "$CAND" ]; then sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a; fi
           fi
+
+          make dist-bin 2>/dev/null || true
+          for t in *.tar.gz *.tar.xz *.tgz; do
+            [ -f "$t" ] || continue
+            mkdir -p /tmp/ctrpf-dist && tar -xf "$t" -C /tmp/ctrpf-dist
+            sudo cp -a /tmp/ctrpf-dist/*/include/. /opt/devkitpro/libctrpf/include/ 2>/dev/null || true
+            sudo cp -a /tmp/ctrpf-dist/*/lib/. /opt/devkitpro/libctrpf/lib/ 2>/dev/null || true
+          done
 
           echo "=== installed layout ==="
           find /opt/devkitpro/libctrpf -type f | head -40
 
-          test -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp \
-            || test -f /opt/devkitpro/libctrpf/include/CTRPluginFramework/CTRPluginFramework.hpp \
-            || (echo "headers missing" && find /opt/devkitpro/libctrpf -name '*.hpp' | head && exit 1)
-
-          # Normalize header path if nested
           if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ] && \
              [ -f /opt/devkitpro/libctrpf/include/CTRPluginFramework/CTRPluginFramework.hpp ]; then
             echo '#include "CTRPluginFramework/CTRPluginFramework.hpp"' | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
           fi
 
-          # Ensure library name -lctrpf
-          if [ ! -f /opt/devkitpro/libctrpf/lib/libctrpf.a ]; then
-            CAND=$(find /opt/devkitpro/libctrpf -name '*.a' | head -1)
-            if [ -n "$CAND" ]; then
-              sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a
+          # Also copy root CTRPluginFramework.hpp if present in include tree
+          if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ]; then
+            H=$(find /opt/devkitpro/libctrpf -name 'CTRPluginFramework.hpp' | head -1)
+            if [ -n "$H" ]; then
+              sudo cp -v "$H" /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
             fi
           fi
 
+          if [ ! -f /opt/devkitpro/libctrpf/lib/libctrpf.a ]; then
+            CAND=$(find /opt/devkitpro/libctrpf -name '*.a' | head -1)
+            if [ -n "$CAND" ]; then sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a; fi
+          fi
+
+          test -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
+          test -f /opt/devkitpro/libctrpf/lib/libctrpf.a
           ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
           ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
 
