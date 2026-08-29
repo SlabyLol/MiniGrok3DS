@@ -42,15 +42,13 @@ jobs:
           cd CTRPluginFramework
           if [ -d Library ]; then cd Library; fi
 
-          # Newer GCC treats overloaded-virtual as error; CTRPF is not fixed yet
           if [ -f Makefile ]; then
             sed -i 's/-Werror//g' Makefile || true
-            # Append override flags
             printf '\nCXXFLAGS += -Wno-error=overloaded-virtual -Wno-error\nCFLAGS += -Wno-error\n' >> Makefile
           fi
 
           echo "Building libctrpf..."
-          make -j$(nproc) CXXFLAGS="$(grep '^CXXFLAGS' Makefile | head -1 | cut -d= -f2-) -Wno-error=overloaded-virtual -Wno-error" \
+          make -j$(nproc) \
             || make -j1 \
             || make -j1 CXXFLAGS="-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -fomit-frame-pointer -ffunction-sections -fno-strict-aliasing -fno-rtti -fno-exceptions -std=gnu++11 -Wno-error=overloaded-virtual -Wno-error"
 
@@ -64,48 +62,42 @@ jobs:
             sudo cp -a Include/. /opt/devkitpro/libctrpf/include/
           fi
 
-          # Find built static libs
-          find . -name 'libctrpf*.a' -o -name '*ctrpf*.a' 2>/dev/null | head -20
           if [ -f lib/libctrpf.a ]; then
             sudo cp -v lib/libctrpf.a /opt/devkitpro/libctrpf/lib/
           else
-            CAND=$(find . -name 'libctrpf.a' | head -1)
+            CAND=$(find . -name 'libctrpf.a' | head -1 || true)
             if [ -n "$CAND" ]; then sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a; fi
           fi
 
-          make dist-bin 2>/dev/null || true
-          for t in *.tar.gz *.tar.xz *.tgz; do
-            [ -f "$t" ] || continue
-            mkdir -p /tmp/ctrpf-dist && tar -xf "$t" -C /tmp/ctrpf-dist
-            sudo cp -a /tmp/ctrpf-dist/*/include/. /opt/devkitpro/libctrpf/include/ 2>/dev/null || true
-            sudo cp -a /tmp/ctrpf-dist/*/lib/. /opt/devkitpro/libctrpf/lib/ 2>/dev/null || true
-          done
-
-          echo "=== installed layout ==="
-          find /opt/devkitpro/libctrpf -type f | head -40
-
-          if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ] && \
-             [ -f /opt/devkitpro/libctrpf/include/CTRPluginFramework/CTRPluginFramework.hpp ]; then
-            echo '#include "CTRPluginFramework/CTRPluginFramework.hpp"' | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
-          fi
-
-          # Also copy root CTRPluginFramework.hpp if present in include tree
+          # Umbrella header expected by #include <CTRPluginFramework.hpp>
           if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ]; then
-            H=$(find /opt/devkitpro/libctrpf -name 'CTRPluginFramework.hpp' | head -1)
-            if [ -n "$H" ]; then
-              sudo cp -v "$H" /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
+            if [ -f include/CTRPluginFramework.hpp ]; then
+              sudo cp -v include/CTRPluginFramework.hpp /opt/devkitpro/libctrpf/include/
+            elif [ -f /opt/devkitpro/libctrpf/include/CTRPluginFramework/CTRPluginFramework.hpp ]; then
+              echo '#include "CTRPluginFramework/CTRPluginFramework.hpp"' | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
+            else
+              # Minimal umbrella matching BlankTemplate usage
+              sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp > /dev/null << 'EOF'
+#pragma once
+#include "CTRPluginFramework/System.hpp"
+#include "CTRPluginFramework/Graphics.hpp"
+#include "CTRPluginFramework/Menu.hpp"
+#include "CTRPluginFramework/Utils.hpp"
+EOF
             fi
           fi
 
-          if [ ! -f /opt/devkitpro/libctrpf/lib/libctrpf.a ]; then
-            CAND=$(find /opt/devkitpro/libctrpf -name '*.a' | head -1)
-            if [ -n "$CAND" ]; then sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a; fi
-          fi
+          # Do not fail on SIGPIPE from head
+          set +e
+          echo "=== installed layout (sample) ==="
+          find /opt/devkitpro/libctrpf -type f | head -40
+          set -e
 
           test -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
           test -f /opt/devkitpro/libctrpf/lib/libctrpf.a
           ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
           ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
+          echo "libctrpf install OK"
 
       - name: Install 3gxtool (best effort)
         run: |
@@ -132,7 +124,7 @@ jobs:
           cp -v MiniGrok.3gx MiniGrok.elf build.log 2>/dev/null || true
           cp -v *.3gx *.elf build.log artifacts/ 2>/dev/null || true
           ls -la >> artifacts/listing.txt
-          find . \( -name '*.o' -o -name '*.elf' -o -name '*.3gx' \) | head -50 > artifacts/build_files.txt || true
+          find . \( -name '*.o' -o -name '*.elf' -o -name '*.3gx' \) 2>/dev/null | head -50 > artifacts/build_files.txt || true
           ls -la artifacts/ || true
 
       - name: Upload build artifacts
