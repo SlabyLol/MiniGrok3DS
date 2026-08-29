@@ -4,10 +4,14 @@ ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
 endif
 
+ifeq ($(strip $(DEVKITPRO)),)
+export DEVKITPRO := /opt/devkitpro
+endif
+
 TOPDIR 		?= 	$(CURDIR)
 include $(DEVKITARM)/3ds_rules
 
-CTRPFLIB	?=	$(DEVKITPRO)/libctrpf
+CTRPFLIB	:=	$(DEVKITPRO)/libctrpf
 
 TARGET		:=	MiniGrok
 PLGINFO 	:=	MiniGrok.plgInfo
@@ -22,7 +26,7 @@ ARCH		:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CFLAGS		:=	$(ARCH) -Os -mword-relocations \
 				-fomit-frame-pointer -ffunction-sections -fno-strict-aliasing
 
-CFLAGS		+=	$(INCLUDE) -D__3DS__
+CFLAGS		+=	$(INCLUDE) -D__3DS__ -I$(CTRPFLIB)/include
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
@@ -48,19 +52,23 @@ SFILES			:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 
 export LD 		:=	$(CXX)
 export OFILES	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
-export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I $(CURDIR)/$(dir) ) \
-					$(foreach dir,$(LIBDIRS),-I $(dir)/include) \
-					-I $(CURDIR)/$(BUILD)
+export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+					-I$(CTRPFLIB)/include \
+					-I$(CURDIR)/$(BUILD)
 
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L $(dir)/lib)
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) -L$(CTRPFLIB)/lib
+
+export CTRPFLIB
+export DEVKITPRO
 
 .PHONY: $(BUILD) clean all re
 
 all: $(BUILD)
 
 $(BUILD):
-	@[ -d $@ ] || mkdir -p $@
-	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile all
+	mkdir -p $(CURDIR)/$(BUILD)
+	$(MAKE) --no-print-directory -C $(CURDIR)/$(BUILD) -f $(CURDIR)/Makefile all
 
 clean:
 	@echo clean ...
