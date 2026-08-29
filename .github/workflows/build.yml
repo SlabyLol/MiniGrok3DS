@@ -74,7 +74,6 @@ jobs:
             if [ -n "$CAND" ]; then sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a; fi
           fi
 
-          # Always ensure umbrella header exists at the path the compiler uses
           if [ -f include/CTRPluginFramework.hpp ]; then
             sudo cp -fv include/CTRPluginFramework.hpp /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
           fi
@@ -88,16 +87,10 @@ jobs:
             } | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp > /dev/null
           fi
 
-          # Also drop a copy into the project tree as fallback include
-          mkdir -p "$GITHUB_WORKSPACE/third_party/libctrpf/include" "$GITHUB_WORKSPACE/third_party/libctrpf/lib"
-          cp -a /opt/devkitpro/libctrpf/include/. "$GITHUB_WORKSPACE/third_party/libctrpf/include/" || true
-          cp -a /opt/devkitpro/libctrpf/lib/. "$GITHUB_WORKSPACE/third_party/libctrpf/lib/" || true
-
           set +e
           echo "=== libctrpf headers ==="
           ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
           ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
-          ls /opt/devkitpro/libctrpf/include/ | head -20
           set -e
 
           test -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
@@ -124,8 +117,8 @@ jobs:
           echo "DEVKITPRO=$DEVKITPRO"
           ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
           ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
-          # Show what make will use
-          make -n 2>&1 | head -5 || true
+          # Prove compiler can see the header
+          echo '#include <CTRPluginFramework.hpp>' | arm-none-eabi-g++ -x c++ -E -I/opt/devkitpro/libctrpf/include -I/opt/devkitpro/libctru/include - -o /dev/null && echo "compiler sees CTRPluginFramework.hpp OK"
           make clean || true
           make -j1 2>&1 | tee build.log
 
