@@ -69,25 +69,21 @@ jobs:
             if [ -n "$CAND" ]; then sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a; fi
           fi
 
-          # Umbrella header expected by #include <CTRPluginFramework.hpp>
+          # Umbrella header for #include <CTRPluginFramework.hpp>
           if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ]; then
             if [ -f include/CTRPluginFramework.hpp ]; then
               sudo cp -v include/CTRPluginFramework.hpp /opt/devkitpro/libctrpf/include/
-            elif [ -f /opt/devkitpro/libctrpf/include/CTRPluginFramework/CTRPluginFramework.hpp ]; then
-              echo '#include "CTRPluginFramework/CTRPluginFramework.hpp"' | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
             else
-              # Minimal umbrella matching BlankTemplate usage
-              sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp > /dev/null << 'EOF'
-#pragma once
-#include "CTRPluginFramework/System.hpp"
-#include "CTRPluginFramework/Graphics.hpp"
-#include "CTRPluginFramework/Menu.hpp"
-#include "CTRPluginFramework/Utils.hpp"
-EOF
+              {
+                echo '#pragma once'
+                echo '#include "CTRPluginFramework/System.hpp"'
+                echo '#include "CTRPluginFramework/Graphics.hpp"'
+                echo '#include "CTRPluginFramework/Menu.hpp"'
+                echo '#include "CTRPluginFramework/Utils.hpp"'
+              } | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp > /dev/null
             fi
           fi
 
-          # Do not fail on SIGPIPE from head
           set +e
           echo "=== installed layout (sample) ==="
           find /opt/devkitpro/libctrpf -type f | head -40
