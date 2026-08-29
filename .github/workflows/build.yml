@@ -17,6 +17,10 @@ jobs:
       run:
         shell: bash
 
+    env:
+      DEVKITPRO: /opt/devkitpro
+      DEVKITARM: /opt/devkitpro/devkitARM
+
     steps:
       - name: Checkout MiniGrok
         uses: actions/checkout@v4
@@ -26,6 +30,7 @@ jobs:
           set +e
           sudo dkp-pacman -Sy --noconfirm 2>/dev/null || true
           sudo dkp-pacman -S --noconfirm --needed 3ds-dev 2>/dev/null || true
+          echo "DEVKITPRO=$DEVKITPRO"
           which arm-none-eabi-g++
           arm-none-eabi-g++ --version | head -1
           ls /opt/devkitpro/libctru/include/3ds.h
@@ -69,30 +74,34 @@ jobs:
             if [ -n "$CAND" ]; then sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a; fi
           fi
 
-          # Umbrella header for #include <CTRPluginFramework.hpp>
+          # Always ensure umbrella header exists at the path the compiler uses
+          if [ -f include/CTRPluginFramework.hpp ]; then
+            sudo cp -fv include/CTRPluginFramework.hpp /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
+          fi
           if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ]; then
-            if [ -f include/CTRPluginFramework.hpp ]; then
-              sudo cp -v include/CTRPluginFramework.hpp /opt/devkitpro/libctrpf/include/
-            else
-              {
-                echo '#pragma once'
-                echo '#include "CTRPluginFramework/System.hpp"'
-                echo '#include "CTRPluginFramework/Graphics.hpp"'
-                echo '#include "CTRPluginFramework/Menu.hpp"'
-                echo '#include "CTRPluginFramework/Utils.hpp"'
-              } | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp > /dev/null
-            fi
+            {
+              echo '#pragma once'
+              echo '#include "CTRPluginFramework/System.hpp"'
+              echo '#include "CTRPluginFramework/Graphics.hpp"'
+              echo '#include "CTRPluginFramework/Menu.hpp"'
+              echo '#include "CTRPluginFramework/Utils.hpp"'
+            } | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp > /dev/null
           fi
 
+          # Also drop a copy into the project tree as fallback include
+          mkdir -p "$GITHUB_WORKSPACE/third_party/libctrpf/include" "$GITHUB_WORKSPACE/third_party/libctrpf/lib"
+          cp -a /opt/devkitpro/libctrpf/include/. "$GITHUB_WORKSPACE/third_party/libctrpf/include/" || true
+          cp -a /opt/devkitpro/libctrpf/lib/. "$GITHUB_WORKSPACE/third_party/libctrpf/lib/" || true
+
           set +e
-          echo "=== installed layout (sample) ==="
-          find /opt/devkitpro/libctrpf -type f | head -40
+          echo "=== libctrpf headers ==="
+          ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
+          ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
+          ls /opt/devkitpro/libctrpf/include/ | head -20
           set -e
 
           test -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
           test -f /opt/devkitpro/libctrpf/lib/libctrpf.a
-          ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
-          ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
           echo "libctrpf install OK"
 
       - name: Install 3gxtool (best effort)
@@ -110,6 +119,13 @@ jobs:
       - name: Build MiniGrok
         run: |
           set -o pipefail
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITARM=/opt/devkitpro/devkitARM
+          echo "DEVKITPRO=$DEVKITPRO"
+          ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
+          ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
+          # Show what make will use
+          make -n 2>&1 | head -5 || true
           make clean || true
           make -j1 2>&1 | tee build.log
 
