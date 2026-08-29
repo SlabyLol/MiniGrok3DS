@@ -18,68 +18,107 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout
+      - name: Checkout MiniGrok
         uses: actions/checkout@v4
 
-      - name: Install libctrpf + 3gxtool
+      - name: Ensure base 3DS toolchain (best effort)
         run: |
           set +e
-          PACMAN_CONF=/opt/devkitpro/pacman/etc/pacman.conf
+          sudo dkp-pacman -Sy --noconfirm 2>/dev/null || true
+          sudo dkp-pacman -S --noconfirm --needed 3ds-dev 2>/dev/null || true
+          which arm-none-eabi-g++
+          arm-none-eabi-g++ --version | head -1
+          ls /opt/devkitpro/libctru/include/3ds.h
 
-          # ThePixellizerOSS first (libctrpf lives here)
-          if ! grep -Fxq "[thepixellizeross-lib]" "$PACMAN_CONF" 2>/dev/null; then
-            printf '\n[thepixellizeross-lib]\nServer = https://thepixellizeross.gitlab.io/packages/any\nSigLevel = Optional\n' | sudo tee -a "$PACMAN_CONF"
+      - name: Build and install libctrpf from source
+        run: |
+          set -e
+          cd /tmp
+          rm -rf CTRPluginFramework
+
+          # Prefer GitHub mirror, fallback GitLab
+          git clone --depth 1 https://github.com/Tekito-256/CTRPluginFramework.git CTRPluginFramework \
+            || git clone --depth 1 https://gitlab.com/thepixellizeross/ctrpluginframework.git CTRPluginFramework
+
+          cd CTRPluginFramework
+
+          # Library lives in Library/ on most mirrors
+          if [ -d Library ]; then
+            cd Library
           fi
-          if ! grep -Fxq "[thepixellizeross-linux]" "$PACMAN_CONF" 2>/dev/null; then
-            printf '\n[thepixellizeross-linux]\nServer = https://thepixellizeross.gitlab.io/packages/x86_64/linux\nSigLevel = Optional\n' | sudo tee -a "$PACMAN_CONF"
+
+          echo "Building libctrpf..."
+          make -j$(nproc) || make
+
+          # Install headers + lib into expected location
+          sudo mkdir -p /opt/devkitpro/libctrpf/include /opt/devkitpro/libctrpf/lib
+
+          if [ -d include ]; then
+            sudo cp -a include/. /opt/devkitpro/libctrpf/include/
+          elif [ -d ../Include ]; then
+            sudo cp -a ../Include/. /opt/devkitpro/libctrpf/include/
+          elif [ -d Include ]; then
+            sudo cp -a Include/. /opt/devkitpro/libctrpf/include/
           fi
 
-          # Official sync often 403 on GHA – never fail the job for that
-          sudo dkp-pacman -Sy --noconfirm 2>/dev/null || echo "dkp-libs sync failed (ignored)"
+          # Common output names
+          for lib in libctrpf.a libCTRPluginFramework.a *.a; do
+            if [ -f "$lib" ]; then
+              sudo cp -v "$lib" /opt/devkitpro/libctrpf/lib/libctrpf.a
+              break
+            fi
+          done
+          find . -name 'libctrpf*.a' -o -name '*CTRPluginFramework*.a' 2>/dev/null | head -20
 
-          # Install only from available DBs
-          sudo dkp-pacman -S --noconfirm --needed libctrpf
-          RC1=$?
-          sudo dkp-pacman -S --noconfirm --needed 3gxtool
-          RC2=$?
-
-          echo "libctrpf install exit: $RC1"
-          echo "3gxtool install exit: $RC2"
-
-          echo "=== search CTRPluginFramework.hpp ==="
-          find /opt/devkitpro -name 'CTRPluginFramework.hpp' 2>/dev/null
-          ls -la /opt/devkitpro/libctrpf/include 2>/dev/null || true
-          ls -la /opt/devkitpro/libctrpf/lib 2>/dev/null || true
-
-          if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ]; then
-            echo "ERROR: libctrpf headers missing after install"
-            # Last resort: try direct package URL patterns
-            mkdir -p /tmp/ctrpf && cd /tmp/ctrpf
-            for url in \
-              "https://thepixellizeross.gitlab.io/packages/any/libctrpf-0.7.4-1-any.pkg.tar.xz" \
-              "https://thepixellizeross.gitlab.io/packages/any/libctrpf-0.8.0-1-any.pkg.tar.xz" \
-              "https://thepixellizeross.gitlab.io/packages/any/libctrpf-latest-any.pkg.tar.xz"
-            do
-              echo "try $url"
-              curl -fsSL -o pkg.tar.xz "$url" && break
+          # dist-bin style layout if present
+          if [ -f dist-bin ] || grep -q dist-bin Makefile 2>/dev/null; then
+            make dist-bin || true
+            tar tf *.tar* 2>/dev/null | head || true
+            for t in *.tar.gz *.tar.xz *.tgz; do
+              [ -f "$t" ] || continue
+              mkdir -p /tmp/ctrpf-dist && tar -xf "$t" -C /tmp/ctrpf-dist
+              sudo cp -a /tmp/ctrpf-dist/*/include/. /opt/devkitpro/libctrpf/include/ 2>/dev/null || true
+              sudo cp -a /tmp/ctrpf-dist/*/lib/. /opt/devkitpro/libctrpf/lib/ 2>/dev/null || true
             done
-            if [ -f pkg.tar.xz ]; then
-              tar -xf pkg.tar.xz
-              sudo mkdir -p /opt/devkitpro/libctrpf
-              sudo cp -a opt/devkitpro/libctrpf/* /opt/devkitpro/libctrpf/ 2>/dev/null || \
-              sudo cp -a usr/* /opt/devkitpro/libctrpf/ 2>/dev/null || true
-              find /tmp/ctrpf -type d -name include 2>/dev/null
-              find /tmp/ctrpf -name 'CTRPluginFramework.hpp' 2>/dev/null
+          fi
+
+          echo "=== installed layout ==="
+          find /opt/devkitpro/libctrpf -type f | head -40
+
+          test -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp \
+            || test -f /opt/devkitpro/libctrpf/include/CTRPluginFramework/CTRPluginFramework.hpp \
+            || (echo "headers missing" && find /opt/devkitpro/libctrpf -name '*.hpp' | head && exit 1)
+
+          # Normalize header path if nested
+          if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ] && \
+             [ -f /opt/devkitpro/libctrpf/include/CTRPluginFramework/CTRPluginFramework.hpp ]; then
+            echo '#include "CTRPluginFramework/CTRPluginFramework.hpp"' | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
+          fi
+
+          # Ensure library name -lctrpf
+          if [ ! -f /opt/devkitpro/libctrpf/lib/libctrpf.a ]; then
+            CAND=$(find /opt/devkitpro/libctrpf -name '*.a' | head -1)
+            if [ -n "$CAND" ]; then
+              sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a
             fi
           fi
 
-          if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ]; then
-            echo "FATAL: still no CTRPluginFramework.hpp"
-            exit 1
-          fi
-          echo "libctrpf OK"
+          ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
+          ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
 
-      - name: Build
+      - name: Install 3gxtool (best effort)
+        run: |
+          set +e
+          PACMAN_CONF=/opt/devkitpro/pacman/etc/pacman.conf
+          if ! grep -Fxq "[thepixellizeross-linux]" "$PACMAN_CONF" 2>/dev/null; then
+            printf '\n[thepixellizeross-lib]\nServer = https://thepixellizeross.gitlab.io/packages/any\nSigLevel = Optional\n' | sudo tee -a "$PACMAN_CONF"
+            printf '\n[thepixellizeross-linux]\nServer = https://thepixellizeross.gitlab.io/packages/x86_64/linux\nSigLevel = Optional\n' | sudo tee -a "$PACMAN_CONF"
+          fi
+          sudo dkp-pacman -Sy --noconfirm 2>/dev/null || true
+          sudo dkp-pacman -S --noconfirm --needed 3gxtool 2>/dev/null || true
+          which 3gxtool || echo "3gxtool not in PATH yet"
+
+      - name: Build MiniGrok
         run: |
           set -o pipefail
           make clean || true
@@ -91,7 +130,6 @@ jobs:
           mkdir -p artifacts
           cp -v MiniGrok.3gx MiniGrok.elf build.log 2>/dev/null || true
           cp -v *.3gx *.elf build.log artifacts/ 2>/dev/null || true
-          ls -la build/ >> artifacts/listing.txt 2>/dev/null || true
           ls -la >> artifacts/listing.txt
           find . \( -name '*.o' -o -name '*.elf' -o -name '*.3gx' \) | head -50 > artifacts/build_files.txt || true
           ls -la artifacts/ || true
