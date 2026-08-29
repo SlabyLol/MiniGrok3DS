@@ -13,29 +13,29 @@
 namespace CTRPluginFramework
 {
 
-// Preferences::MenuHotkeys lives in libctrpf.
-// Declare only what we need – avoid including Preferences.hpp
-// (pulls BMPImage and breaks on PACKED with current headers).
+// Preferences::MenuHotkeys is defined in libctrpf.
 class Preferences
 {
 public:
     static u32 MenuHotkeys;
 };
 
-// ============================================================
-// MiniGrok – cute AI assistant for the 3DS
-// OPEN MENU: Select + X
-// ============================================================
+static const u32 kMenuHotkey = static_cast<u32>(Key::Select | Key::X);
+
+static void ForceMenuHotkey(void)
+{
+    Preferences::MenuHotkeys = kMenuHotkey;
+}
 
 static bool g_notified = false;
 
 static void AboutMiniGrok(MenuEntry *entry)
 {
     std::string msg =
-        "MiniGrok v0.1.2\n\n"
-        "The cute AI assistant for your 3DS.\n\n"
-        "OPEN THIS MENU:\n"
-        "  Hold SELECT + X\n\n"
+        "MiniGrok v0.1.3\n\n"
+        "OPEN MENU:\n"
+        "  Hold SELECT + press X\n\n"
+        "If that fails, try only SELECT.\n\n"
         "API key (later):\n"
         "sd:/luma/plugins/MiniGrok/api.txt";
 
@@ -53,14 +53,9 @@ static void ReadScreen(MenuEntry *entry)
         "May MiniGrok read info about the current screens?"))
         return;
 
-    std::string info =
-        "Top screen: 400x240\n"
-        "Bottom screen: 320x240\n\n"
-        "Full screen capture + send to AI\n"
-        "is not implemented yet.\n\n"
-        "This entry confirms permissions work.";
-
-    MessageBox("Screen info", info)();
+    MessageBox("Screen info",
+        "Top: 400x240\nBottom: 320x240\n\n"
+        "Full capture + AI upload comes later.")();
 }
 
 static void FileTools(MenuEntry *entry)
@@ -106,24 +101,24 @@ static void ChangeLanguage(MenuEntry *entry)
 
 static void HowToOpen(MenuEntry *entry)
 {
-    MessageBox("How to open MiniGrok",
-        "Hotkey: SELECT + X\n\n"
-        "1. Start a game (plugin must load)\n"
-        "2. Hold SELECT and press X\n"
-        "3. This menu opens\n\n"
-        "If nothing happens:\n"
-        "- Plugin Loader enabled in Rosalina?\n"
-        "- File at sd:/luma/plugins/default.3gx ?\n"
-        "- Did you see 'MiniGrok loaded' on screen?")();
+    MessageBox("How to open",
+        "1. Start any game\n"
+        "2. Wait for OSD: MiniGrok loaded\n"
+        "3. Hold SELECT + press X\n\n"
+        "Also try SELECT alone.\n\n"
+        "Check:\n"
+        "- Rosalina -> Plugin Loader ON\n"
+        "- sd:/luma/plugins/default.3gx\n"
+        "- Delete old plugin settings if stuck")();
 }
 
 void InitMenu(PluginMenu &menu)
 {
     menu += new MenuEntry("How to open / Hilfe", nullptr, HowToOpen);
     menu += new MenuEntry("MiniGrok Chat", nullptr, OpenChat);
-    menu += new MenuEntry("Screen info (permission)", nullptr, ReadScreen);
+    menu += new MenuEntry("Screen info", nullptr, ReadScreen);
     menu += new MenuEntry("File tools", nullptr, FileTools);
-    menu += new MenuEntry("Process / Title info", nullptr, TitleTools);
+    menu += new MenuEntry("Process info", nullptr, TitleTools);
     menu += new MenuEntry("Language / Sprache", nullptr, ChangeLanguage);
     menu += new MenuEntry("About MiniGrok", nullptr, AboutMiniGrok);
 }
@@ -131,6 +126,7 @@ void InitMenu(PluginMenu &menu)
 void PatchProcess(FwkSettings &settings)
 {
     (void)settings;
+    ForceMenuHotkey();
 }
 
 void OnProcessExit(void)
@@ -139,14 +135,21 @@ void OnProcessExit(void)
 
 int main(void)
 {
-    // Force menu open combo: SELECT + X
-    Preferences::MenuHotkeys = static_cast<u32>(Key::Select | Key::X);
+    ForceMenuHotkey();
 
-    PluginMenu *menu = new PluginMenu("MiniGrok", 0, 1, 2,
-        "MiniGrok – cute AI assistant.\n"
-        "Open with SELECT + X.");
+    PluginMenu *menu = new PluginMenu("MiniGrok", 0, 1, 3,
+        "MiniGrok\nOpen: SELECT + X");
 
     menu->SynchronizeWithFrame(true);
+
+    menu->OnFirstOpening = [](void)
+    {
+        ForceMenuHotkey();
+        OSD::Notify("Hotkey: SELECT + X");
+    };
+
+    // Re-apply every plugin loop tick (settings cannot stick to Select only)
+    *menu += ForceMenuHotkey;
 
     if (!g_notified)
     {
@@ -158,6 +161,7 @@ int main(void)
     Language::Load();
     InitMenu(*menu);
 
+    ForceMenuHotkey();
     menu->Run();
 
     delete menu;
