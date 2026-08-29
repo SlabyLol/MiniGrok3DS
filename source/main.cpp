@@ -1,6 +1,5 @@
 #include <3ds.h>
 #include <CTRPluginFramework.hpp>
-#include <CTRPluginFrameworkImpl/Preferences.hpp>
 #include <string>
 #include <vector>
 
@@ -13,6 +12,15 @@
 
 namespace CTRPluginFramework
 {
+
+// Preferences::MenuHotkeys lives in libctrpf.
+// Declare only what we need – avoid including Preferences.hpp
+// (pulls BMPImage and breaks on PACKED with current headers).
+class Preferences
+{
+public:
+    static u32 MenuHotkeys;
+};
 
 // ============================================================
 // MiniGrok – cute AI assistant for the 3DS
@@ -150,7 +158,6 @@ int main(void)
     Language::Load();
     InitMenu(*menu);
 
-    // Blocks; opens when SELECT+X is pressed
     menu->Run();
 
     delete menu;
