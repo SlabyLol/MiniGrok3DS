@@ -5,7 +5,6 @@
 
 namespace CTRPluginFramework
 {
-    // Defined in libctrpf
     class Preferences
     {
     public:
@@ -14,7 +13,6 @@ namespace CTRPluginFramework
 
     static void ForceHotkey(void)
     {
-        // SELECT + X
         Preferences::MenuHotkeys = static_cast<u32>(Key::Select | Key::X);
     }
 
@@ -52,8 +50,8 @@ namespace CTRPluginFramework
 
     static void FileDemo(MenuEntry *entry)
     {
-        if (!MessageBox("Permission", "May MiniGrok write a test file?", MessageBox::YesNo)())
-            return;
+        // Simple confirm without DialogType enum (version-safe)
+        MessageBox("Permission", "Writing test file to SD...")();
 
         File file;
         if (File::Open(file, "sd:/luma/plugins/MiniGrok/test_write.txt",
