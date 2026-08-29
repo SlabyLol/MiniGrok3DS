@@ -2,8 +2,8 @@
 #define CHEATS_H
 
 #include <CTRPluginFramework.hpp>
-#include "Helpers.hpp"
-#include "Unicode.h"
+#include <vector>
+#include <string>
 
 namespace CTRPluginFramework
 {
