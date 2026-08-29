@@ -1,146 +1,90 @@
-#---------------------------------------------------------------------------------
 .SUFFIXES:
-#---------------------------------------------------------------------------------
 
 ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
 endif
 
-TOPDIR ?= $(CURDIR)
+TOPDIR 		?= 	$(CURDIR)
 include $(DEVKITARM)/3ds_rules
 
-#---------------------------------------------------------------------------------
-# TARGET is the name of the output
-# BUILD is the directory where object files & intermediate files will be placed
-# SOURCES is a list of directories containing source code
-# DATA is a list of directories containing data files
-# INCLUDES is a list of directories containing header files
-#---------------------------------------------------------------------------------
+CTRPFLIB	?=	$(DEVKITPRO)/libctrpf
+
 TARGET		:=	MiniGrok
+PLGINFO 	:=	MiniGrok.plgInfo
+
 BUILD		:=	build
-SOURCES		:=	source
-DATA		:=	data
 INCLUDES	:=	include
-# RESOURCES	:=	resources
+SOURCES 	:=	source
 
 #---------------------------------------------------------------------------------
-# options for code generation
-#---------------------------------------------------------------------------------
-ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
+ARCH		:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
-CFLAGS	:=	-g -Wall -O2 -mword-relocations \
-			-fomit-frame-pointer -ffunction-sections \
-			$(ARCH)
+CFLAGS		:=	$(ARCH) -Os -mword-relocations \
+				-fomit-frame-pointer -ffunction-sections -fno-strict-aliasing
 
-CFLAGS	+=	$(INCLUDE) -D__3DS__
+CFLAGS		+=	$(INCLUDE) -D__3DS__
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
-ASFLAGS	:=	-g $(ARCH)
-LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+ASFLAGS		:=	$(ARCH)
+LDFLAGS		:=	-T $(TOPDIR)/3gx.ld $(ARCH) -Os -Wl,--gc-sections,--strip-discarded,--strip-debug
 
-LIBS	:= -lctru -lm
+LIBS		:=	-lctrpf -lctru
+LIBDIRS		:=	$(CTRPFLIB) $(CTRULIB) $(PORTLIBS)
 
-#---------------------------------------------------------------------------------
-# list of directories containing libraries, this must be the top level containing
-# include and lib
-#---------------------------------------------------------------------------------
-LIBDIRS	:= $(CTRULIB) $(PORTLIBS)
-
-# If you have libctrpf installed:
-# LIBDIRS += $(DEVKITPRO)/libctrpf
-
-#---------------------------------------------------------------------------------
-# no real need to edit anything past this point unless you need to add additional
-# rules for different file extensions
 #---------------------------------------------------------------------------------
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
 export TOPDIR	:=	$(CURDIR)
-
-export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
-			$(foreach dir,$(DATA),$(CURDIR)/$(dir))
+export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
 
 export DEPSDIR	:=	$(CURDIR)/$(BUILD)
 
-CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
-CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
-SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
-BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+CFILES			:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+CPPFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+SFILES			:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 
-#---------------------------------------------------------------------------------
-# use CXX for linking C++ projects, CC for standard C
-#---------------------------------------------------------------------------------
-ifeq ($(strip $(CPPFILES)),)
-#---------------------------------------------------------------------------------
-	export LD	:=	$(CC)
-#---------------------------------------------------------------------------------
-else
-#---------------------------------------------------------------------------------
-	export LD	:=	$(CXX)
-#---------------------------------------------------------------------------------
-endif
-#---------------------------------------------------------------------------------
+export LD 		:=	$(CXX)
+export OFILES	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I $(CURDIR)/$(dir) ) \
+					$(foreach dir,$(LIBDIRS),-I $(dir)/include) \
+					-I $(CURDIR)/$(BUILD)
 
-export OFILES_SOURCES 	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L $(dir)/lib)
 
-export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES))
+.PHONY: $(BUILD) clean all re
 
-export OFILES 		:=	$(OFILES_BIN) $(OFILES_SOURCES)
-
-export HFILES	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
-
-export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-			-I$(CURDIR)/$(BUILD)
-
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
-
-.PHONY: $(BUILD) clean all
-
-#---------------------------------------------------------------------------------
 all: $(BUILD)
 
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
-	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile all
 
-#---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(TARGET).3gx
+	@rm -fr $(BUILD) $(OUTPUT).3gx $(OUTPUT).elf
 
-#---------------------------------------------------------------------------------
+re: clean all
+
 else
-.PHONY:	all
 
 DEPENDS	:=	$(OFILES:.o=.d)
 
-#---------------------------------------------------------------------------------
-# main targets
-#---------------------------------------------------------------------------------
-all	:	$(OUTPUT).3gx
+.DEFAULT_GOAL := all
 
-$(OUTPUT).3gx	:	$(OUTPUT).elf
-	@echo "built ... $(notdir $@)"
-	@# 3gxtool $(OUTPUT).elf $(OUTPUT).3gx   # uncomment when 3gxtool is ready
+.PHONY: all
+all: $(OUTPUT).3gx
 
-$(OUTPUT).elf	:	$(OFILES)
+$(OUTPUT).elf : $(OFILES)
+	@echo linking $(notdir $@)
+	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
 
-$(OFILES_SOURCES) : $(HFILES)
-
-#---------------------------------------------------------------------------------
-# you need a rule like this for each extension you use as binary data
-#---------------------------------------------------------------------------------
-%.bin.o	%_bin.h :	%.bin
-#---------------------------------------------------------------------------------
-	@echo $(notdir $<)
-	@$(bin2o)
+$(OUTPUT).3gx : $(OUTPUT).elf $(TOPDIR)/$(PLGINFO)
+	@echo creating $(notdir $@)
+	@3gxtool -s $< $(TOPDIR)/$(PLGINFO) $@
 
 -include $(DEPENDS)
 
-#---------------------------------------------------------------------------------------
 endif
-#---------------------------------------------------------------------------------------
