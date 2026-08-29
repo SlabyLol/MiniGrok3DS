@@ -11,132 +11,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: devkitpro/devkitarm:latest
-
-    defaults:
-      run:
-        shell: bash
-
-    env:
-      DEVKITPRO: /opt/devkitpro
-      DEVKITARM: /opt/devkitpro/devkitARM
+      image: pablomk7/libctrpf:0.8.0
 
     steps:
-      - name: Checkout MiniGrok
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Ensure base 3DS toolchain (best effort)
-        run: |
-          set +e
-          sudo dkp-pacman -Sy --noconfirm 2>/dev/null || true
-          sudo dkp-pacman -S --noconfirm --needed 3ds-dev 2>/dev/null || true
-          echo "DEVKITPRO=$DEVKITPRO"
-          which arm-none-eabi-g++
-          arm-none-eabi-g++ --version | head -1
-          ls /opt/devkitpro/libctru/include/3ds.h
+      - name: Build Plugin
+        run: make
 
-      - name: Build and install libctrpf from source
-        run: |
-          set -e
-          cd /tmp
-          rm -rf CTRPluginFramework
-
-          git clone --depth 1 https://github.com/Tekito-256/CTRPluginFramework.git CTRPluginFramework \
-            || git clone --depth 1 https://gitlab.com/thepixellizeross/ctrpluginframework.git CTRPluginFramework
-
-          cd CTRPluginFramework
-          if [ -d Library ]; then cd Library; fi
-
-          if [ -f Makefile ]; then
-            sed -i 's/-Werror//g' Makefile || true
-            printf '\nCXXFLAGS += -Wno-error=overloaded-virtual -Wno-error\nCFLAGS += -Wno-error\n' >> Makefile
-          fi
-
-          echo "Building libctrpf..."
-          make -j$(nproc) \
-            || make -j1 \
-            || make -j1 CXXFLAGS="-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -fomit-frame-pointer -ffunction-sections -fno-strict-aliasing -fno-rtti -fno-exceptions -std=gnu++11 -Wno-error=overloaded-virtual -Wno-error"
-
-          sudo mkdir -p /opt/devkitpro/libctrpf/include /opt/devkitpro/libctrpf/lib
-
-          if [ -d include ]; then
-            sudo cp -a include/. /opt/devkitpro/libctrpf/include/
-          elif [ -d ../Include ]; then
-            sudo cp -a ../Include/. /opt/devkitpro/libctrpf/include/
-          elif [ -d Include ]; then
-            sudo cp -a Include/. /opt/devkitpro/libctrpf/include/
-          fi
-
-          if [ -f lib/libctrpf.a ]; then
-            sudo cp -v lib/libctrpf.a /opt/devkitpro/libctrpf/lib/
-          else
-            CAND=$(find . -name 'libctrpf.a' | head -1 || true)
-            if [ -n "$CAND" ]; then sudo cp -v "$CAND" /opt/devkitpro/libctrpf/lib/libctrpf.a; fi
-          fi
-
-          if [ -f include/CTRPluginFramework.hpp ]; then
-            sudo cp -fv include/CTRPluginFramework.hpp /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
-          fi
-          if [ ! -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp ]; then
-            {
-              echo '#pragma once'
-              echo '#include "CTRPluginFramework/System.hpp"'
-              echo '#include "CTRPluginFramework/Graphics.hpp"'
-              echo '#include "CTRPluginFramework/Menu.hpp"'
-              echo '#include "CTRPluginFramework/Utils.hpp"'
-            } | sudo tee /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp > /dev/null
-          fi
-
-          set +e
-          echo "=== libctrpf headers ==="
-          ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
-          ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
-          set -e
-
-          test -f /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
-          test -f /opt/devkitpro/libctrpf/lib/libctrpf.a
-          echo "libctrpf install OK"
-
-      - name: Install 3gxtool (best effort)
-        run: |
-          set +e
-          PACMAN_CONF=/opt/devkitpro/pacman/etc/pacman.conf
-          if ! grep -Fxq "[thepixellizeross-linux]" "$PACMAN_CONF" 2>/dev/null; then
-            printf '\n[thepixellizeross-lib]\nServer = https://thepixellizeross.gitlab.io/packages/any\nSigLevel = Optional\n' | sudo tee -a "$PACMAN_CONF"
-            printf '\n[thepixellizeross-linux]\nServer = https://thepixellizeross.gitlab.io/packages/x86_64/linux\nSigLevel = Optional\n' | sudo tee -a "$PACMAN_CONF"
-          fi
-          sudo dkp-pacman -Sy --noconfirm 2>/dev/null || true
-          sudo dkp-pacman -S --noconfirm --needed 3gxtool 2>/dev/null || true
-          which 3gxtool || echo "3gxtool not in PATH yet"
-
-      - name: Build MiniGrok
-        run: |
-          set -o pipefail
-          export DEVKITPRO=/opt/devkitpro
-          export DEVKITARM=/opt/devkitpro/devkitARM
-          echo "DEVKITPRO=$DEVKITPRO"
-          ls -la /opt/devkitpro/libctrpf/include/CTRPluginFramework.hpp
-          ls -la /opt/devkitpro/libctrpf/lib/libctrpf.a
-          # Prove compiler can see the header
-          echo '#include <CTRPluginFramework.hpp>' | arm-none-eabi-g++ -x c++ -E -I/opt/devkitpro/libctrpf/include -I/opt/devkitpro/libctru/include - -o /dev/null && echo "compiler sees CTRPluginFramework.hpp OK"
-          make clean || true
-          make -j1 2>&1 | tee build.log
-
-      - name: Collect artifacts
-        if: always()
-        run: |
-          mkdir -p artifacts
-          cp -v MiniGrok.3gx MiniGrok.elf build.log 2>/dev/null || true
-          cp -v *.3gx *.elf build.log artifacts/ 2>/dev/null || true
-          ls -la >> artifacts/listing.txt
-          find . \( -name '*.o' -o -name '*.elf' -o -name '*.3gx' \) 2>/dev/null | head -50 > artifacts/build_files.txt || true
-          ls -la artifacts/ || true
-
-      - name: Upload build artifacts
-        if: always()
+      - name: Upload 3GX
         uses: actions/upload-artifact@v4
         with:
-          name: MiniGrok-build
-          path: artifacts/
-          if-no-files-found: warn
-          retention-days: 14
+          name: MiniGrok-3gx
+          path: |
+            MiniGrok.3gx
+            MiniGrok.elf
+          if-no-files-found: error

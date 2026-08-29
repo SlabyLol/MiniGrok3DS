@@ -4,29 +4,24 @@ ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
 endif
 
-ifeq ($(strip $(DEVKITPRO)),)
-export DEVKITPRO := /opt/devkitpro
-endif
-
 TOPDIR 		?= 	$(CURDIR)
 include $(DEVKITARM)/3ds_rules
 
-CTRPFLIB	:=	$(DEVKITPRO)/libctrpf
+CTRPFLIB	?=	$(DEVKITPRO)/libctrpf
 
 TARGET		:=	MiniGrok
 PLGINFO 	:=	MiniGrok.plgInfo
 
-BUILD		:=	build
-INCLUDES	:=	include
-SOURCES 	:=	source
+BUILD		:=	Build
+INCLUDES	:=	Includes
+SOURCES 	:=	Sources
 
-#---------------------------------------------------------------------------------
 ARCH		:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
 CFLAGS		:=	$(ARCH) -Os -mword-relocations \
 				-fomit-frame-pointer -ffunction-sections -fno-strict-aliasing
 
-CFLAGS		+=	$(INCLUDE) -D__3DS__ -I$(CTRPFLIB)/include
+CFLAGS		+=	$(INCLUDE) -D__3DS__
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
@@ -36,9 +31,7 @@ LDFLAGS		:=	-T $(TOPDIR)/3gx.ld $(ARCH) -Os -Wl,--gc-sections,--strip-discarded,
 LIBS		:=	-lctrpf -lctru
 LIBDIRS		:=	$(CTRPFLIB) $(CTRULIB) $(PORTLIBS)
 
-#---------------------------------------------------------------------------------
 ifneq ($(BUILD),$(notdir $(CURDIR)))
-#---------------------------------------------------------------------------------
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
 export TOPDIR	:=	$(CURDIR)
@@ -52,23 +45,19 @@ SFILES			:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 
 export LD 		:=	$(CXX)
 export OFILES	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
-export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-					-I$(CTRPFLIB)/include \
-					-I$(CURDIR)/$(BUILD)
+export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I $(CURDIR)/$(dir) ) \
+					$(foreach dir,$(LIBDIRS),-I $(dir)/include) \
+					-I $(CURDIR)/$(BUILD)
 
-export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) -L$(CTRPFLIB)/lib
-
-export CTRPFLIB
-export DEVKITPRO
+export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L $(dir)/lib)
 
 .PHONY: $(BUILD) clean all re
 
 all: $(BUILD)
 
 $(BUILD):
-	mkdir -p $(CURDIR)/$(BUILD)
-	$(MAKE) --no-print-directory -C $(CURDIR)/$(BUILD) -f $(CURDIR)/Makefile all
+	@[ -d $@ ] || mkdir -p $@
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 clean:
 	@echo clean ...
@@ -80,18 +69,16 @@ else
 
 DEPENDS	:=	$(OFILES:.o=.d)
 
-.DEFAULT_GOAL := all
+$(OUTPUT).3gx : $(OFILES)
 
-.PHONY: all
-all: $(OUTPUT).3gx
+%.bin.o	:	%.bin
+	@echo $(notdir $<)
+	@$(bin2o)
 
-$(OUTPUT).elf : $(OFILES)
-	@echo linking $(notdir $@)
-	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
-
-$(OUTPUT).3gx : $(OUTPUT).elf $(TOPDIR)/$(PLGINFO)
+.PRECIOUS: %.elf
+%.3gx: %.elf
 	@echo creating $(notdir $@)
-	@3gxtool -s $< $(TOPDIR)/$(PLGINFO) $@
+	@3gxtool -s $(word 1, $^) $(TOPDIR)/$(PLGINFO) $@
 
 -include $(DEPENDS)
 
